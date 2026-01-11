@@ -4,12 +4,15 @@ const nextConfig: NextConfig = {
   experimental: {
     serverComponentsExternalPackages: ["pdf-parse", "canvas"],
   },
-  // Increase API route body size limit for file uploads
-  api: {
-    bodyParser: {
-      sizeLimit: "10mb",
-    },
-    responseLimit: false,
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      // Add polyfills for server-side
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        canvas: false,
+      };
+    }
+    return config;
   },
 };
 
