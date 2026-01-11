@@ -19,22 +19,39 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error generating questions:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    console.error("Full error:", error);
-    console.error("API Key present:", !!process.env.OPENAI_API_KEY);
-    console.error("Provider:", process.env.AI_PROVIDER);
+    
+    // Check if it's an API key issue
+    if (errorMessage.includes("API key") || errorMessage.includes("not initialized") || errorMessage.includes("401")) {
+      const provider = process.env.AI_PROVIDER || "openai";
+      const apiKeyName = provider === "openai" ? "OPENAI_API_KEY" : "ANTHROPIC_API_KEY";
+      const consoleUrl = provider === "openai" ? "platform.openai.com" : "console.anthropic.com";
+      
+      return NextResponse.json(
+        { 
+          error: "API Key Required",
+          details: `Please set ${apiKeyName} in your Vercel environment variables.`,
+          suggestion: `Get your API key from ${consoleUrl} and add it to your Vercel project settings.`
+        },
+        { status: 401 }
+      );
+    }
+    
+    // Check if it's a JSON parsing error
+    if (errorMessage.includes("JSON") || errorMessage.includes("parse")) {
+      return NextResponse.json(
+        { 
+          error: "Failed to parse AI response",
+          details: errorMessage,
+          suggestion: "The AI returned an invalid response. Please try again."
+        },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(
       { 
         error: "Failed to generate questions",
-        details: errorMessage,
-        // Include helpful info in development
-        ...(process.env.NODE_ENV === "development" && {
-          debug: {
-            hasApiKey: !!process.env.OPENAI_API_KEY,
-            provider: process.env.AI_PROVIDER,
-            model: process.env.AI_MODEL,
-          }
-        })
+        details: errorMessage
       },
       { status: 500 }
     );

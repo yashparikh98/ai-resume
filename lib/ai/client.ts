@@ -111,12 +111,36 @@ Return ONLY valid JSON, no other text.`;
     try {
       const response = await this.callAI(prompt, 2000);
       const jsonText = response.trim();
+      
       // Extract JSON from markdown code blocks if present
+      let jsonString = jsonText;
       const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       jsonText.match(/```\s*([\s\S]*?)\s*```/) ||
-                       [null, jsonText];
-      const questions = JSON.parse(jsonMatch[1] || jsonText);
-      return Array.isArray(questions) ? questions : [];
+                       jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        jsonString = jsonMatch[1].trim();
+      }
+      
+      // Try to fix common JSON issues
+      jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'); // Remove trailing commas
+      
+      try {
+        const questions = JSON.parse(jsonString);
+        return Array.isArray(questions) ? questions : [];
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        console.error("Attempted to parse:", jsonString.substring(0, 500));
+        // Try to extract array from the response
+        const arrayMatch = jsonString.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const questions = JSON.parse(arrayMatch[0]);
+            return Array.isArray(questions) ? questions : [];
+          } catch (e) {
+            console.error("Failed to parse extracted array:", e);
+          }
+        }
+        throw new Error(`Invalid JSON response from AI: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
     } catch (error) {
       console.error("Error generating questions:", error);
       throw error;
@@ -158,11 +182,37 @@ Return ONLY valid JSON, no other text.`;
     try {
       const response = await this.callAI(prompt, 2000);
       const jsonText = response.trim();
+      
+      // Extract JSON from markdown code blocks if present
+      let jsonString = jsonText;
       const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       jsonText.match(/```\s*([\s\S]*?)\s*```/) ||
-                       [null, jsonText];
-      const questions = JSON.parse(jsonMatch[1] || jsonText);
-      return Array.isArray(questions) ? questions : [];
+                       jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        jsonString = jsonMatch[1].trim();
+      }
+      
+      // Try to fix common JSON issues
+      jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'); // Remove trailing commas
+      
+      try {
+        const questions = JSON.parse(jsonString);
+        return Array.isArray(questions) ? questions : [];
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        console.error("Attempted to parse:", jsonString.substring(0, 500));
+        // Try to extract array from the response
+        const arrayMatch = jsonString.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const questions = JSON.parse(arrayMatch[0]);
+            return Array.isArray(questions) ? questions : [];
+          } catch (e) {
+            console.error("Failed to parse extracted array:", e);
+          }
+        }
+        // Return empty array for follow-up questions if parsing fails
+        return [];
+      }
     } catch (error) {
       console.error("Error generating follow-up questions:", error);
       return [];
@@ -209,11 +259,36 @@ Return ONLY valid JSON, no other text.`;
     try {
       const response = await this.callAI(prompt, 4000);
       const jsonText = response.trim();
+      
+      // Extract JSON from markdown code blocks if present
+      let jsonString = jsonText;
       const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       jsonText.match(/```\s*([\s\S]*?)\s*```/) ||
-                       [null, jsonText];
-      const suggestions = JSON.parse(jsonMatch[1] || jsonText);
-      return suggestions;
+                       jsonText.match(/```\s*([\s\S]*?)\s*```/);
+      if (jsonMatch && jsonMatch[1]) {
+        jsonString = jsonMatch[1].trim();
+      }
+      
+      // Try to fix common JSON issues
+      jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'); // Remove trailing commas
+      
+      try {
+        const suggestions = JSON.parse(jsonString);
+        return Array.isArray(suggestions) ? suggestions : [];
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError);
+        console.error("Attempted to parse:", jsonString.substring(0, 500));
+        // Try to extract array from the response
+        const arrayMatch = jsonString.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const suggestions = JSON.parse(arrayMatch[0]);
+            return Array.isArray(suggestions) ? suggestions : [];
+          } catch (e) {
+            console.error("Failed to parse extracted array:", e);
+          }
+        }
+        throw new Error(`Invalid JSON response from AI: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+      }
     } catch (error) {
       console.error("Error generating suggestions:", error);
       throw error;
