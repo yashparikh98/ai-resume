@@ -2,6 +2,13 @@
 
 import { useState, useRef } from "react";
 import { Resume } from "@/types";
+import * as pdfjsLib from "pdfjs-dist";
+
+// Configure pdfjs worker for client-side
+if (typeof window !== "undefined") {
+  // Use CDN for worker in browser
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+}
 
 interface ResumeUploadProps {
   onUpload: (resume: Resume) => void;
@@ -13,6 +20,27 @@ export function ResumeUpload({ onUpload }: ResumeUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const parsePDF = async (file: File): Promise<string> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = "";
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(" ");
+        fullText += pageText + "\n";
+      }
+
+      return fullText.trim();
+    } catch (err) {
+      throw new Error(`Failed to parse PDF: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const handleFile = async (file: File) => {
     if (!file.type.includes("pdf") && !file.type.includes("word") && !file.name.endsWith(".docx")) {
       setError("Please upload a PDF or DOCX file");
@@ -23,23 +51,47 @@ export function ResumeUpload({ onUpload }: ResumeUploadProps) {
     setError(null);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      let resumeText: string;
+      let fileName = file.name;
 
-      const response = await fetch("/api/resume/upload", {
-        method: "POST",
-        body: formData,
-      });
+      // Parse PDF on client side
+      if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
+        resumeText = await parsePDF(file);
+      } else {
+        // For DOCX, send to server
+        const formData = new FormData();
+        formData.append("file", file);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMsg = errorData.error || errorData.details || "Failed to upload resume";
-        const suggestion = errorData.suggestion || "";
-        throw new Error(suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg);
+        const response = await fetch("/api/resume/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          const errorMsg = errorData.error || errorData.details || "Failed to upload resume";
+          const suggestion = errorData.suggestion || "";
+          throw new Error(suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg);
+        }
+
+        const data = await response.json();
+        onUpload(data.resume);
+        return;
       }
 
-      const data = await response.json();
-      onUpload(data.resume);
+      // Create resume object from parsed PDF text
+      if (!resumeText.trim()) {
+        throw new Error("Could not extract text from the PDF file");
+      }
+
+      const resume: Resume = {
+        id: crypto.randomUUID(),
+        text: resumeText,
+        fileName: fileName,
+        uploadedAt: new Date(),
+      };
+
+      onUpload(resume);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload resume");
     } finally {
