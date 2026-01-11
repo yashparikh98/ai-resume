@@ -30,7 +30,14 @@ export async function POST(request: NextRequest) {
       try {
         // Check if pdfParse is available
         if (!pdfParse || (typeof pdfParse !== "function" && !pdfParse.PDFParse)) {
-          throw new Error("PDF parsing library not available. This may be a serverless environment issue.");
+          // PDF parsing not available in this environment (likely serverless)
+          return NextResponse.json(
+            { 
+              error: "PDF parsing is currently unavailable in this environment. Please convert your resume to DOCX format and try again.",
+              suggestion: "You can convert PDF to DOCX using Microsoft Word, Google Docs, or online converters."
+            },
+            { status: 400 }
+          );
         }
 
         // Try calling as function first (older versions)
@@ -48,14 +55,28 @@ export async function POST(request: NextRequest) {
           if (typeof parseFn === "function") {
             pdfData = await parseFn(buffer);
           } else {
-            throw new Error("Could not find PDF parsing function");
+            return NextResponse.json(
+              { 
+                error: "PDF parsing is currently unavailable. Please convert your resume to DOCX format and try again.",
+                suggestion: "You can convert PDF to DOCX using Microsoft Word, Google Docs, or online converters."
+              },
+              { status: 400 }
+            );
           }
         }
         resumeText = pdfData.text || String(pdfData);
       } catch (parseError) {
         console.error("PDF parsing error:", parseError);
         const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
-        throw new Error(`Failed to parse PDF: ${errorMsg}. If this persists, try uploading a DOCX file instead.`);
+        // Return a helpful error instead of throwing
+        return NextResponse.json(
+          { 
+            error: "Failed to parse PDF file. PDF parsing may not be fully supported in this environment.",
+            details: errorMsg,
+            suggestion: "Please convert your resume to DOCX format and try again. You can use Microsoft Word, Google Docs, or online converters."
+          },
+          { status: 400 }
+        );
       }
     } else if (
       file.type ===

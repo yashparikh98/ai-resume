@@ -32,7 +32,10 @@ export function ResumeUpload({ onUpload }: ResumeUploadProps) {
       });
 
       if (!response.ok) {
-        throw new Error("Failed to upload resume");
+        const errorData = await response.json().catch(() => ({}));
+        const errorMsg = errorData.error || errorData.details || "Failed to upload resume";
+        const suggestion = errorData.suggestion || "";
+        throw new Error(suggestion ? `${errorMsg}\n\n${suggestion}` : errorMsg);
       }
 
       const data = await response.json();
@@ -125,7 +128,23 @@ export function ResumeUpload({ onUpload }: ResumeUploadProps) {
 
       {error && (
         <div className="rounded-md bg-red-50 p-4">
-          <p className="text-sm text-red-800">{error}</p>
+          <p className="text-sm text-red-800 whitespace-pre-line">{error}</p>
+          {error.includes("DOCX") && (
+            <div className="mt-3 p-3 bg-blue-50 rounded border border-blue-200">
+              <p className="text-sm text-blue-800 font-medium mb-1">Quick Solution:</p>
+              <p className="text-sm text-blue-700">
+                Convert your PDF to DOCX using{" "}
+                <a href="https://www.ilovepdf.com/pdf_to_word" target="_blank" rel="noopener noreferrer" className="underline">
+                  iLovePDF
+                </a>
+                {" or "}
+                <a href="https://www.zamzar.com/convert/pdf-to-docx/" target="_blank" rel="noopener noreferrer" className="underline">
+                  Zamzar
+                </a>
+                , then upload the DOCX file.
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
