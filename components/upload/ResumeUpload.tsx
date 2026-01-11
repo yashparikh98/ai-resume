@@ -6,8 +6,8 @@ import * as pdfjsLib from "pdfjs-dist";
 
 // Configure pdfjs worker for client-side
 if (typeof window !== "undefined") {
-  // Use CDN for worker in browser
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+  // Use local worker file from public folder
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 }
 
 interface ResumeUploadProps {
