@@ -3,6 +3,10 @@ import { Resume } from "@/types";
 import mammoth from "mammoth";
 import pdfParse from "@/lib/parsers/pdf";
 
+// Configure route for Vercel
+export const runtime = "nodejs";
+export const maxDuration = 30; // 30 seconds for file processing
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -24,20 +28,34 @@ export async function POST(request: NextRequest) {
       // Parse PDF - handle different pdf-parse versions
       let pdfData;
       try {
+        // Check if pdfParse is available
+        if (!pdfParse || (typeof pdfParse !== "function" && !pdfParse.PDFParse)) {
+          throw new Error("PDF parsing library not available. This may be a serverless environment issue.");
+        }
+
         // Try calling as function first (older versions)
         if (typeof pdfParse === "function") {
           pdfData = await pdfParse(buffer);
-        } else {
+        } else if (pdfParse.PDFParse) {
           // Use PDFParse class (newer versions)
-          const PDFParseClass = (pdfParse as any).PDFParse || pdfParse;
+          const PDFParseClass = pdfParse.PDFParse;
           const parser = new PDFParseClass({ data: buffer });
           const result = await parser.getText();
           pdfData = { text: result.text || result };
+        } else {
+          // Try as module.exports
+          const parseFn = pdfParse.default || pdfParse;
+          if (typeof parseFn === "function") {
+            pdfData = await parseFn(buffer);
+          } else {
+            throw new Error("Could not find PDF parsing function");
+          }
         }
         resumeText = pdfData.text || String(pdfData);
       } catch (parseError) {
         console.error("PDF parsing error:", parseError);
-        throw new Error(`Failed to parse PDF: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
+        const errorMsg = parseError instanceof Error ? parseError.message : String(parseError);
+        throw new Error(`Failed to parse PDF: ${errorMsg}. If this persists, try uploading a DOCX file instead.`);
       }
     } else if (
       file.type ===
