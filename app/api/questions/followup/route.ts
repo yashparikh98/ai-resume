@@ -4,11 +4,31 @@ import { aiClient } from "@/lib/ai/client";
 
 export async function POST(request: NextRequest) {
   try {
-    const { resume, jobDescription, answers } = await request.json();
+    const { resume, jobDescription, answers, questionText, selectedAnswer } = await request.json();
 
-    if (!resume || !jobDescription || !answers) {
+    if (!resume || !jobDescription) {
       return NextResponse.json(
-        { error: "Resume, job description, and answers are required" },
+        { error: "Resume and job description are required" },
+        { status: 400 }
+      );
+    }
+
+    // If questionText and selectedAnswer are provided, generate clarifying questions for that specific answer
+    if (questionText && selectedAnswer) {
+      const questions = await aiClient.generateFollowUpQuestions(
+        resume,
+        jobDescription,
+        answers || [],
+        questionText,
+        selectedAnswer
+      );
+      return NextResponse.json({ questions });
+    }
+
+    // Otherwise, use the general follow-up logic
+    if (!answers) {
+      return NextResponse.json(
+        { error: "Answers are required" },
         { status: 400 }
       );
     }

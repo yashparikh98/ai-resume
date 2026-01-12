@@ -94,17 +94,19 @@ ${resume}
 JOB DESCRIPTION:
 ${jobDescription}
 
-Based on the resume and job description above, generate 3-5 clarifying questions that will help you better understand the candidate's experience, accomplishments, and skills. These questions should:
+Based on the resume and job description above, generate exactly 3 multiple-choice questions that will help you better understand the candidate's experience, accomplishments, and skills. These questions should:
 1. Fill gaps between the resume and job requirements
 2. Ask about specific accomplishments or metrics
 3. Understand relevant experience that might not be clearly stated
 4. Clarify technical skills or certifications
 
+IMPORTANT: All 3 questions must be multiple-choice type with 3-5 options each.
+
 Return your questions as a JSON array where each question has:
 - id: a unique identifier
 - question: the question text
-- type: "text", "textarea", or "multiple-choice"
-- options: (optional) array of options if type is "multiple-choice"
+- type: "multiple-choice" (must be multiple-choice)
+- options: array of 3-5 option strings
 
 Return ONLY valid JSON, no other text.`;
 
@@ -150,8 +152,76 @@ Return ONLY valid JSON, no other text.`;
   async generateFollowUpQuestions(
     resume: string,
     jobDescription: string,
-    answers: Answer[]
+    answers: Answer[],
+    questionText?: string,
+    selectedAnswer?: string
   ): Promise<Question[]> {
+    // If questionText and selectedAnswer are provided, generate clarifying questions for that specific answer
+    if (questionText && selectedAnswer) {
+      const prompt = `Based on the resume, job description, and a specific answer below, generate 1-2 clarifying follow-up questions to better understand the candidate's response.
+
+RESUME:
+${resume}
+
+JOB DESCRIPTION:
+${jobDescription}
+
+QUESTION:
+${questionText}
+
+ANSWER:
+${selectedAnswer}
+
+Generate 1-2 clarifying questions that dive deeper into the candidate's answer. These should be open-ended (text or textarea type) to get more details.
+
+Return your questions as a JSON array where each question has:
+- id: a unique identifier
+- question: the question text
+- type: "text" or "textarea"
+- options: (not needed for text/textarea)
+
+Return ONLY valid JSON, no other text. If no clarifying questions are needed, return an empty array.`;
+
+      try {
+        const response = await this.callAI(prompt, 2000);
+        const jsonText = response.trim();
+        
+        // Extract JSON from markdown code blocks if present
+        let jsonString = jsonText;
+        const jsonMatch = jsonText.match(/```json\s*([\s\S]*?)\s*```/) || 
+                         jsonText.match(/```\s*([\s\S]*?)\s*```/);
+        if (jsonMatch && jsonMatch[1]) {
+          jsonString = jsonMatch[1].trim();
+        }
+        
+        // Try to fix common JSON issues
+        jsonString = jsonString.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'); // Remove trailing commas
+        
+        try {
+          const questions = JSON.parse(jsonString);
+          return Array.isArray(questions) ? questions : [];
+        } catch (parseError) {
+          console.error("JSON parse error:", parseError);
+          console.error("Attempted to parse:", jsonString.substring(0, 500));
+          // Try to extract array from the response
+          const arrayMatch = jsonString.match(/\[[\s\S]*\]/);
+          if (arrayMatch) {
+            try {
+              const questions = JSON.parse(arrayMatch[0]);
+              return Array.isArray(questions) ? questions : [];
+            } catch (e) {
+              console.error("Failed to parse extracted array:", e);
+            }
+          }
+          return [];
+        }
+      } catch (error) {
+        console.error("Error generating follow-up questions:", error);
+        return [];
+      }
+    }
+
+    // Original logic for general follow-up questions (fallback)
     const answersText = answers
       .map((a, idx) => `Question ${idx + 1}: ${a.questionId}\nAnswer: ${a.answer}`)
       .join("\n\n");

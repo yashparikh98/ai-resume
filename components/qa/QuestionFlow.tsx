@@ -22,6 +22,9 @@ export function QuestionFlow({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [followUpRounds, setFollowUpRounds] = useState(0);
+  const [multipleChoiceAnswers, setMultipleChoiceAnswers] = useState<Record<string, string>>({});
+  const [clarifyingQuestionMap, setClarifyingQuestionMap] = useState<Record<string, string>>({}); // Maps clarifying question ID to the MC answer it clarifies
+  const [phase, setPhase] = useState<"multiple-choice" | "clarifying">("multiple-choice");
   const MAX_FOLLOWUP_ROUNDS = 2; // Limit to 2 rounds of follow-up questions
 
   useEffect(() => {
@@ -66,47 +69,74 @@ export function QuestionFlow({
   };
 
   const handleNext = async () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    } else {
-      // Limit follow-up questions to prevent infinite loops
-      if (followUpRounds >= MAX_FOLLOWUP_ROUNDS) {
-        // Max follow-ups reached, move to suggestions
-        const answerArray: Answer[] = Object.entries(answers).map(
-          ([questionId, answer]) => ({ questionId, answer })
-        );
-        if (typeof window !== "undefined") {
-          sessionStorage.setItem("answers", JSON.stringify(answerArray));
+    if (phase === "multiple-choice") {
+      // Save the multiple choice answer
+      const currentQuestion = questions[currentQuestionIndex];
+      const currentAnswer = answers[currentQuestion.id] || "";
+      
+      if (currentQuestionIndex < questions.length - 1) {
+        // Move to next multiple choice question
+        setCurrentQuestionIndex((prev) => prev + 1);
+      } else {
+        // All 3 multiple choice questions answered, generate clarifying questions
+        const allMCAnswers = { ...answers };
+        setMultipleChoiceAnswers(allMCAnswers);
+        
+        // Generate clarifying questions for each multiple choice answer
+        setIsLoading(true);
+        const newClarifyingQuestions: Question[] = [];
+        const clarifyingMap: Record<string, string> = {};
+        
+        // Generate clarifying questions for each multiple choice answer sequentially
+        for (const question of questions) {
+          const answer = allMCAnswers[question.id];
+          if (answer) {
+            try {
+              const response = await fetch("/api/questions/followup", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  resume: resume.text,
+                  jobDescription: jobDescription.text,
+                  questionText: question.question,
+                  selectedAnswer: answer,
+                  answers: Object.entries(allMCAnswers).map(([qId, ans]) => ({
+                    questionId: qId,
+                    answer: ans,
+                  })),
+                }),
+              });
+
+              if (response.ok) {
+                const data = await response.json();
+                if (data.questions && data.questions.length > 0) {
+                  // Add clarifying questions and map them to the MC answer
+                  for (const clarifyingQ of data.questions) {
+                    newClarifyingQuestions.push(clarifyingQ);
+                    clarifyingMap[clarifyingQ.id] = answer; // Map clarifying Q to the MC answer
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("Error generating clarifying questions:", error);
+            }
+          }
         }
-        onComplete(answerArray);
-        return;
-      }
-
-      // Check if AI wants to ask follow-up questions
-      const response = await fetch("/api/questions/followup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          resume: resume.text,
-          jobDescription: jobDescription.text,
-          answers: Object.entries(answers).map(([questionId, answer]) => ({
-            questionId,
-            answer,
-          })),
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.questions && data.questions.length > 0) {
-          setQuestions((prev) => [...prev, ...data.questions]);
-          setCurrentQuestionIndex((prev) => prev + 1);
-          setFollowUpRounds((prev) => prev + 1);
+        
+        setIsLoading(false);
+        
+        if (newClarifyingQuestions.length > 0) {
+          // Add clarifying questions to the main questions array
+          setQuestions((prev) => [...prev, ...newClarifyingQuestions]);
+          setClarifyingQuestionMap(clarifyingMap);
+          // Move to clarifying questions phase
+          setPhase("clarifying");
+          setCurrentQuestionIndex(questions.length); // Start after the multiple choice questions
         } else {
-          // No more questions, complete
-          const answerArray: Answer[] = Object.entries(answers).map(
+          // No clarifying questions, move to suggestions
+          const answerArray: Answer[] = Object.entries(allMCAnswers).map(
             ([questionId, answer]) => ({ questionId, answer })
           );
           if (typeof window !== "undefined") {
@@ -114,9 +144,15 @@ export function QuestionFlow({
           }
           onComplete(answerArray);
         }
+      }
+    } else {
+      // Clarifying questions phase
+      if (currentQuestionIndex < questions.length - 1) {
+        setCurrentQuestionIndex((prev) => prev + 1);
       } else {
-        // Complete with current answers
-        const answerArray: Answer[] = Object.entries(answers).map(
+        // All questions answered, move to suggestions
+        const allAnswers = { ...answers };
+        const answerArray: Answer[] = Object.entries(allAnswers).map(
           ([questionId, answer]) => ({ questionId, answer })
         );
         if (typeof window !== "undefined") {
@@ -255,7 +291,15 @@ ANTHROPIC_API_KEY=your_key_here`}
   }
 
   const currentQuestion = questions[currentQuestionIndex];
-  const currentAnswer = answers[currentQuestion.id] || "";
+  const currentAnswer = currentQuestion ? (answers[currentQuestion.id] || "") : "";
+  
+  if (!currentQuestion) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-600">Loading questions...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -274,17 +318,27 @@ ANTHROPIC_API_KEY=your_key_here`}
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-gray-700">
-            Question {currentQuestionIndex + 1} of {questions.length}
+            {phase === "multiple-choice" 
+              ? `Question ${currentQuestionIndex + 1} of 3`
+              : `Clarifying Question ${currentQuestionIndex - 2} of ${questions.length - 3}`
+            }
           </span>
           <div className="w-32 bg-gray-200 rounded-full h-2">
             <div
               className="bg-blue-600 h-2 rounded-full transition-all"
               style={{
-                width: `${((currentQuestionIndex + 1) / questions.length) * 100}%`,
+                width: phase === "multiple-choice"
+                  ? `${((currentQuestionIndex + 1) / 3) * 100}%`
+                  : `${((currentQuestionIndex - 2) / Math.max(questions.length - 3, 1)) * 100}%`,
               }}
             ></div>
           </div>
         </div>
+        {phase === "clarifying" && currentQuestion && clarifyingQuestionMap[currentQuestion.id] && (
+          <div className="text-xs text-gray-500 mt-1 bg-blue-50 p-2 rounded">
+            <span className="font-medium">Clarifying:</span> "{clarifyingQuestionMap[currentQuestion.id]}"
+          </div>
+        )}
       </div>
 
       <div className="bg-gray-50 rounded-lg p-6">
