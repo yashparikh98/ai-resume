@@ -86,7 +86,25 @@ export class AIClient {
     resume: string,
     jobDescription: string
   ): Promise<Question[]> {
-    const prompt = `You are a helpful AI assistant helping someone tailor their resume for a job application.
+    const prompt = `You are an expert resume strategist helping someone tailor their resume for a job application.
+
+STEP 1: Analyze the job description and determine what an IDEAL candidate's resume would look like for this role. Consider:
+- Key skills, technologies, and qualifications required
+- Experience level and years needed
+- Industry-specific knowledge
+- Soft skills and competencies
+- Education and certifications
+- Achievements and metrics that would impress
+
+STEP 2: Analyze the provided resume to understand:
+- Where the candidate is a STRONG fit (existing skills/experience that match)
+- Where there are GAPS (missing skills, experience, or qualifications)
+- What would make this candidate a BETTER fit for the role
+
+STEP 3: Based on your analysis, generate exactly 3 strategic multiple-choice questions that will help you understand:
+- What accomplishments, projects, or experiences the candidate has that aren't clearly shown in the resume
+- What skills or experiences they might have that could bridge gaps
+- What achievements or metrics they could highlight to better match the ideal candidate profile
 
 RESUME:
 ${resume}
@@ -94,13 +112,10 @@ ${resume}
 JOB DESCRIPTION:
 ${jobDescription}
 
-Based on the resume and job description above, generate exactly 3 multiple-choice questions that will help you better understand the candidate's experience, accomplishments, and skills. These questions should:
-1. Fill gaps between the resume and job requirements
-2. Ask about specific accomplishments or metrics
-3. Understand relevant experience that might not be clearly stated
-4. Clarify technical skills or certifications
-
-IMPORTANT: All 3 questions must be multiple-choice type with 3-5 options each.
+IMPORTANT: 
+- All 3 questions must be multiple-choice type with 3-5 options each
+- Questions should focus on discovering hidden strengths or experiences that could improve fit
+- Don't just ask generic questions - make them strategic based on the gap analysis
 
 Return your questions as a JSON array where each question has:
 - id: a unique identifier
@@ -158,7 +173,12 @@ Return ONLY valid JSON, no other text.`;
   ): Promise<Question[]> {
     // If questionText and selectedAnswer are provided, generate clarifying questions for that specific answer
     if (questionText && selectedAnswer) {
-      const prompt = `Based on the resume, job description, and a specific answer below, generate 1-2 clarifying follow-up questions to better understand the candidate's response.
+      const prompt = `You are analyzing a candidate's answer to understand how to better tailor their resume for a job.
+
+CONTEXT:
+- You've analyzed the job description and identified what an ideal candidate would look like
+- You've analyzed the resume to find gaps and strengths
+- The candidate just answered a strategic question about their experience
 
 RESUME:
 ${resume}
@@ -166,13 +186,18 @@ ${resume}
 JOB DESCRIPTION:
 ${jobDescription}
 
-QUESTION:
+MULTIPLE CHOICE QUESTION:
 ${questionText}
 
-ANSWER:
+CANDIDATE'S ANSWER:
 ${selectedAnswer}
 
-Generate 1-2 clarifying questions that dive deeper into the candidate's answer. These should be open-ended (text or textarea type) to get more details.
+Generate 1-2 clarifying follow-up questions that will help you:
+- Understand specific accomplishments, metrics, or achievements related to their answer
+- Discover details about their experience that could bridge gaps between their resume and the ideal candidate profile
+- Get concrete examples or projects that demonstrate their fit for the role
+
+These should be open-ended (text or textarea type) to get detailed, specific information.
 
 Return your questions as a JSON array where each question has:
 - id: a unique identifier
@@ -298,7 +323,22 @@ Return ONLY valid JSON, no other text.`;
       .map((a) => `Q: ${a.questionId}\nA: ${a.answer}`)
       .join("\n\n");
 
-    const prompt = `You are an expert resume reviewer helping someone tailor their resume for a specific job.
+    const prompt = `You are an expert resume strategist helping someone tailor their resume for a specific job.
+
+STEP 1: Analyze the job description and determine what an IDEAL candidate's resume would look like for this role.
+- What are the key skills, technologies, qualifications, and experience required?
+- What achievements, metrics, or accomplishments would impress the hiring manager?
+- What industry knowledge, certifications, or education would be expected?
+
+STEP 2: Analyze the provided resume to understand:
+- Where the candidate is a STRONG fit (existing skills/experience that match the ideal profile)
+- Where there are GAPS (missing skills, experience, qualifications compared to ideal)
+- What unique strengths or experiences the candidate has that could be better highlighted
+
+STEP 3: Review the candidate's answers to understand:
+- What additional accomplishments, projects, or experiences they have
+- What skills or experiences they mentioned that aren't in the resume
+- What achievements or metrics they could highlight
 
 RESUME:
 ${resume}
@@ -306,23 +346,36 @@ ${resume}
 JOB DESCRIPTION:
 ${jobDescription}
 
-CANDIDATE'S ANSWERS TO CLARIFYING QUESTIONS:
+CANDIDATE'S ANSWERS:
 ${answersText}
 
-Analyze the resume against the job description and provide specific, actionable suggestions to improve the resume. For each suggestion, provide:
-1. Type: "add" (add new content), "remove" (remove unnecessary content), "emphasize" (highlight existing content), or "reword" (rewrite existing content)
+STEP 4: Generate strategic suggestions that:
+- Bridge gaps between the resume and ideal candidate profile
+- Better highlight existing strengths that match the job
+- Incorporate information from the candidate's answers
+- Use keywords from the job description NATURALLY (don't just copy-paste)
+- Make the candidate appear as a better fit for the role
+
+CRITICAL: 
+- Do NOT just copy text from the job description into the resume
+- Focus on how the candidate's ACTUAL experience and skills align with the job
+- Suggestions should be based on the candidate's real background, not fabricated content
+- Use natural language that reflects the candidate's actual experience level and style
+
+For each suggestion, provide:
+1. Type: "add" (add new content based on candidate's answers), "remove" (remove unnecessary content), "emphasize" (highlight existing content), or "reword" (rewrite existing content to better match)
 2. Section: which section of the resume (e.g., "Experience", "Skills", "Summary")
 3. Current text: (if applicable) the current text that should be changed
-4. Suggested text: (if applicable) the suggested new text
-5. Reason: why this change will help match the job description
+4. Suggested text: (if applicable) the suggested new text - must be based on candidate's actual experience
+5. Reason: why this change will help bridge gaps or better match the ideal candidate profile
 
 Return your suggestions as a JSON array where each suggestion has:
 - id: a unique identifier
 - type: "add" | "remove" | "emphasize" | "reword"
 - section: (optional) the resume section
 - currentText: (optional) current text to change
-- suggestedText: (optional) suggested new text
-- reason: explanation of why this suggestion helps
+- suggestedText: (optional) suggested new text (must reflect candidate's actual experience)
+- reason: explanation of why this suggestion improves fit
 
 Return ONLY valid JSON, no other text.`;
 
@@ -389,7 +442,13 @@ Return ONLY valid JSON, no other text.`;
       .map((a) => `Q: ${a.questionId}\nA: ${a.answer}`)
       .join("\n\n");
 
-    const prompt = `Generate a curated resume based on the original resume, job description, accepted suggestions, and candidate's answers.
+    const prompt = `You are creating a curated resume that bridges the gap between the candidate's actual experience and what an ideal candidate would look like for this role.
+
+STRATEGIC APPROACH:
+1. Understand what an ideal candidate's resume would look like based on the job description
+2. Identify where the candidate is a strong fit and where there are gaps
+3. Use the candidate's answers to discover hidden strengths and experiences
+4. Apply suggestions that improve fit while staying true to the candidate's actual background
 
 ORIGINAL RESUME:
 ${truncatedResume}
@@ -404,11 +463,19 @@ CANDIDATE'S ANSWERS:
 ${answersText}
 
 Create a complete, well-formatted resume that:
-1. Incorporates all accepted suggestions
-2. Emphasizes relevant experience and skills for this job
-3. Uses keywords from the job description naturally
-4. Maintains professional formatting
-5. Is ready to be used for this specific job application
+1. Incorporates all accepted suggestions strategically
+2. Emphasizes the candidate's ACTUAL experience and skills that match the job
+3. Uses keywords from the job description NATURALLY (don't just copy-paste JD text)
+4. Highlights accomplishments and experiences from the candidate's answers
+5. Bridges gaps by better showcasing existing strengths, not by fabricating content
+6. Maintains professional formatting and the candidate's authentic voice
+7. Makes the candidate appear as a strong fit based on their real background
+
+CRITICAL: 
+- Base all content on the candidate's ACTUAL experience from their resume and answers
+- Do NOT copy text directly from the job description
+- Use natural language that reflects the candidate's experience level
+- Focus on how their real skills and experience align with the role
 
 Return the complete resume text, formatted clearly with sections (Summary, Experience, Education, Skills, etc.).`;
 
