@@ -26,6 +26,7 @@ export function SuggestionsView({
     const fetchSuggestions = async () => {
       setIsLoading(true);
       try {
+        console.log("Fetching suggestions with answers:", answers);
         const response = await fetch("/api/suggestions/generate", {
           method: "POST",
           headers: {
@@ -39,13 +40,22 @@ export function SuggestionsView({
         });
 
         if (!response.ok) {
-          throw new Error("Failed to generate suggestions");
+          const errorData = await response.json().catch(() => ({}));
+          const errorMsg = errorData.details || errorData.error || "Failed to generate suggestions";
+          console.error("Suggestions API error:", errorMsg);
+          throw new Error(errorMsg);
         }
 
         const data = await response.json();
-        setSuggestions(data.suggestions);
+        console.log("Received suggestions:", data.suggestions);
+        if (!data.suggestions || data.suggestions.length === 0) {
+          console.warn("No suggestions returned from API");
+        }
+        setSuggestions(data.suggestions || []);
       } catch (error) {
         console.error("Error fetching suggestions:", error);
+        // Show error to user
+        setSuggestions([]);
       } finally {
         setIsLoading(false);
       }
@@ -75,8 +85,24 @@ export function SuggestionsView({
       </h2>
 
       {suggestions.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-gray-600">No suggestions available.</p>
+        <div className="text-center py-12 space-y-4">
+          <p className="text-gray-600">No suggestions were generated.</p>
+          {answers.length > 0 ? (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Your {answers.length} answer{answers.length !== 1 ? 's' : ''} {answers.length === 1 ? 'was' : 'were'} included in the analysis.
+              </p>
+              <p className="text-sm text-blue-700 mt-2">
+                This might be due to an API error or the AI couldn't generate suggestions. Please try again or check your API configuration.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-2xl mx-auto">
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> No answers were provided. Suggestions are generated based on your resume, job description, and your answers to clarifying questions.
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-4">
